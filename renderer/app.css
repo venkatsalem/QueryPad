@@ -144,11 +144,11 @@ body {
   flex-shrink: 0;
 }
 
-.item-del {
+.item-del, .item-edit {
   background: none;
   border: none;
   color: transparent;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   padding: 0 2px;
   border-radius: 2px;
@@ -156,8 +156,10 @@ body {
   transition: color 0.1s;
 }
 .conn-item:hover .item-del,
+.conn-item:hover .item-edit,
 .query-item:hover .item-del { color: var(--text-dim); }
-.item-del:hover { color: var(--red) !important; }
+.item-del:hover  { color: var(--red) !important; }
+.item-edit:hover { color: var(--accent) !important; }
 
 /* ── Sidebar drag handle ───────────────────────────────────────────────────── */
 #sidebar-handle {

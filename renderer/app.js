@@ -18,6 +18,8 @@ const state = {
 let editor = null;     // Monaco instance
 let gridApi = null;    // AG Grid instance
 let saveTimer = null;  // debounce handle
+let idSeq = 0;         // monotonic counter for unique tab IDs
+let restoring = false; // true while rebuilding tabs from a saved session
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
@@ -34,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadConnections();
 
   try {
-    initMonaco(() => createTab());
+    initMonaco(() => restoreSession());
   } catch (e) {
     console.error('Monaco init failed:', e);
     showToast('Editor failed to load: ' + e.message, true);
@@ -179,8 +181,12 @@ function copyRows(selectedOnly) {
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 
+function newTabId() {
+  return `tab-${Date.now()}-${idSeq++}`;
+}
+
 function createTab(name, content) {
-  const id   = 'tab-' + Date.now();
+  const id   = newTabId();
   const tnum = state.nextTabNum++;
   state.tabs.set(id, {
     id,
@@ -191,6 +197,7 @@ function createTab(name, content) {
   });
   renderTabBar();
   switchTab(id);
+  scheduleAutosave();
   return id;
 }
 
@@ -207,6 +214,7 @@ function switchTab(id) {
   }
   clearResults();
   renderTabBar();
+  if (!restoring) scheduleAutosave();
 }
 
 function closeTab(id) {
@@ -218,6 +226,42 @@ function closeTab(id) {
   } else {
     renderTabBar();
   }
+  scheduleAutosave();
+}
+
+// ── Session restore ────────────────────────────────────────────────────────
+
+function restoreTab(t) {
+  const id = t.id || newTabId();
+  state.tabs.set(id, {
+    id,
+    name:    t.name || `query-${state.nextTabNum}.sql`,
+    content: t.content || '',
+    dirty:   false,
+    connId:  t.connId || null,
+  });
+  // Keep auto-numbered names from colliding after a restore.
+  const m = /^query-(\d+)\.sql$/.exec(t.name || '');
+  if (m) state.nextTabNum = Math.max(state.nextTabNum, parseInt(m[1], 10) + 1);
+  return id;
+}
+
+async function restoreSession() {
+  let session = null;
+  try { session = await window.querypad.session.load(); } catch (_) {}
+
+  restoring = true;
+  if (session && Array.isArray(session.tabs) && session.tabs.length) {
+    session.tabs.forEach(restoreTab);
+    renderTabBar();
+    const active = (session.activeTabId && state.tabs.has(session.activeTabId))
+      ? session.activeTabId
+      : [...state.tabs.keys()][0];
+    switchTab(active);
+  } else {
+    createTab();
+  }
+  restoring = false;
 }
 
 function renderTabBar() {
@@ -271,21 +315,33 @@ function renderConnectionsList() {
     badge.className = 'conn-type-badge';
     badge.textContent = { oracle: 'ORA', postgres: 'PG', mysql: 'MY' }[conn.type] || '';
 
+    const edit = document.createElement('button');
+    edit.className = 'item-edit';
+    edit.textContent = '✎';
+    edit.title = 'Edit connection';
+    edit.onclick = (e) => {
+      e.stopPropagation();
+      openEditConnModal(conn);
+    };
+
     const del = document.createElement('button');
     del.className = 'item-del';
     del.textContent = '×';
     del.title = 'Remove connection';
     del.onclick = async (e) => {
       e.stopPropagation();
+      if (!confirm(`Delete connection "${conn.name}"?`)) return;
       await window.querypad.db.deleteConnection(conn.id);
       if (state.activeConnId === conn.id) setActiveConnection(null);
       await loadConnections();
     };
 
     row.onclick = () => activateConnection(conn);
+    row.ondblclick = () => openEditConnModal(conn);
     row.appendChild(dot);
     row.appendChild(name);
     row.appendChild(badge);
+    row.appendChild(edit);
     row.appendChild(del);
     el.appendChild(row);
   }
@@ -509,6 +565,14 @@ function sqlVal(v) {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
+// Quote an identifier for the active DB. MySQL uses backticks; Oracle/Postgres
+// (and ANSI SQL) use double quotes.
+function quoteId(name) {
+  const conn = state.connections.find(c => c.id === state.activeConnId);
+  if (conn && conn.type === 'mysql') return '`' + String(name).replace(/`/g, '``') + '`';
+  return '"' + String(name).replace(/"/g, '""') + '"';
+}
+
 function generateCSV(columns, rows) {
   const escape = v => {
     if (v === null || v === undefined) return '';
@@ -520,7 +584,7 @@ function generateCSV(columns, rows) {
 }
 
 function generateInsertSQL(table, columns, rows) {
-  const cols = columns.map(c => `"${c}"`).join(', ');
+  const cols = columns.map(quoteId).join(', ');
   return rows.map(row =>
     `INSERT INTO ${table} (${cols}) VALUES (${row.map(sqlVal).join(', ')});`
   ).join('\n');
@@ -531,9 +595,9 @@ function generateUpdateSQL(table, keyCol, columns, rows) {
   return rows.map(row => {
     const sets = columns
       .filter((_, i) => i !== keyIdx)
-      .map((c, i) => `"${c}" = ${sqlVal(row[i < keyIdx ? i : i + 1])}`)
+      .map((c, i) => `${quoteId(c)} = ${sqlVal(row[i < keyIdx ? i : i + 1])}`)
       .join(', ');
-    const where = `"${keyCol}" = ${sqlVal(row[keyIdx])}`;
+    const where = `${quoteId(keyCol)} = ${sqlVal(row[keyIdx])}`;
     return `UPDATE ${table} SET ${sets} WHERE ${where};`;
   }).join('\n');
 }
@@ -545,15 +609,27 @@ async function downloadContent(content, filename, mime) {
   if (saved) showToast('Saved to ' + saved.split(/[\\/]/).pop());
 }
 
-// ── Auto-save ─────────────────────────────────────────────────────────────────
+// ── Auto-save (whole session) ──────────────────────────────────────────────
+
+// Serialize every open tab + the active tab to disk. Called debounced on edits
+// and immediately-ish on structural changes (new/close/switch/rename).
+async function persistSession() {
+  if (state.activeTabId && editor) {
+    const cur = state.tabs.get(state.activeTabId);
+    if (cur) cur.content = editor.getValue();
+  }
+  const tabs = [...state.tabs.values()].map(t => ({
+    id: t.id, name: t.name, content: t.content, connId: t.connId,
+  }));
+  await window.querypad.session.save({ tabs, activeTabId: state.activeTabId });
+}
 
 function scheduleAutosave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
+    await persistSession();
     const tab = state.tabs.get(state.activeTabId);
-    if (!tab) return;
-    await window.querypad.query.autosave(state.activeTabId, tab.content);
-    tab.dirty = false;
+    if (tab) tab.dirty = false;
     renderTabBar();
     document.getElementById('st-save').textContent = 'Autosaved ' + new Date().toLocaleTimeString();
   }, 600);
@@ -566,14 +642,36 @@ let editingConnId = null;
 function openNewConnModal() {
   editingConnId = null;
   document.getElementById('conn-modal-title').textContent = 'New Connection';
+  document.getElementById('btn-save-conn').textContent = 'Save';
   ['f-name','f-host','f-port','f-service','f-db','f-user','f-pass'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
   document.getElementById('f-type').value = 'oracle';
   document.getElementById('test-result').textContent = '';
+  document.getElementById('test-result').className = 'dim';
   updateConnModalFields();
   openModal('conn-modal');
+  setTimeout(() => document.getElementById('f-name').focus(), 50);
+}
+
+function openEditConnModal(conn) {
+  editingConnId = conn.id;
+  document.getElementById('conn-modal-title').textContent = 'Edit Connection';
+  document.getElementById('btn-save-conn').textContent = 'Update';
+  document.getElementById('f-name').value    = conn.name || '';
+  document.getElementById('f-type').value    = conn.type || 'oracle';
+  document.getElementById('f-host').value    = conn.host || '';
+  document.getElementById('f-port').value    = conn.port || '';
+  document.getElementById('f-service').value = conn.service || '';
+  document.getElementById('f-db').value      = conn.database || '';
+  document.getElementById('f-user').value    = conn.username || '';
+  document.getElementById('f-pass').value    = conn.password || '';
+  document.getElementById('test-result').textContent = '';
+  document.getElementById('test-result').className = 'dim';
+  updateConnModalFields();
+  openModal('conn-modal');
+  setTimeout(() => document.getElementById('f-name').focus(), 50);
 }
 
 const PORT_DEFAULTS = { oracle: '1521', postgres: '5432', mysql: '3306' };
@@ -614,11 +712,26 @@ async function testConnection() {
 async function saveConnection() {
   const cfg = readConnForm();
   if (!cfg.name) { showToast('Connection name is required', true); return; }
-  if (editingConnId) cfg.id = editingConnId;
+
+  const isEdit = !!editingConnId;
+  if (isEdit) cfg.id = editingConnId;
+
   await window.querypad.db.saveConnection(cfg);
+
+  if (isEdit) {
+    // Drop any live pool/handle so the next activate uses the new settings.
+    try { await window.querypad.db.disconnect(cfg.id); } catch (_) {}
+    state.connectedIds.delete(cfg.id);
+  }
+
   await loadConnections();
+
+  // Refresh the label/status (reads the freshly-loaded connection) in case the
+  // active connection was renamed.
+  if (isEdit && state.activeConnId === cfg.id) setActiveConnection(cfg.id);
+
   closeModal('conn-modal');
-  showToast('Connection saved');
+  showToast(isEdit ? 'Connection updated' : 'Connection saved');
 }
 
 function readConnForm() {
@@ -657,6 +770,7 @@ async function confirmSaveQuery() {
   await renderQueriesList();
 
   if (tab) { tab.name = name + '.sql'; renderTabBar(); }
+  scheduleAutosave();
   closeModal('save-modal');
   showToast('Saved as ' + name + '.sql');
 }
@@ -778,6 +892,10 @@ function wireEvents() {
       hideGridContextMenu();
     }
   });
+
+  // Flush the session synchronously-ish before the window goes away, so the
+  // last few hundred ms of edits (inside the debounce window) aren't lost.
+  window.addEventListener('beforeunload', () => { persistSession(); });
 }
 
 // ── OS theme ──────────────────────────────────────────────────────────────────

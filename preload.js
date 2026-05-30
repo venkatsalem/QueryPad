@@ -11,12 +11,14 @@ contextBridge.exposeInMainWorld('querypad', {
     disconnect:     (id) => ipcRenderer.invoke('db:disconnect', id),
   },
   query: {
-    save:          (name, connId, content) => ipcRenderer.invoke('query:save', name, connId, content),
-    load:          (name, connId)          => ipcRenderer.invoke('query:load', name, connId),
-    list:          (connId)                => ipcRenderer.invoke('query:list', connId),
-    delete:        (name, connId)          => ipcRenderer.invoke('query:delete', name, connId),
-    autosave:      (tabId, content)        => ipcRenderer.invoke('query:autosave', tabId, content),
-    loadAutosaved: (tabId)                 => ipcRenderer.invoke('query:load-autosaved', tabId),
+    save:   (name, connId, content) => ipcRenderer.invoke('query:save', name, connId, content),
+    load:   (name, connId)          => ipcRenderer.invoke('query:load', name, connId),
+    list:   (connId)                => ipcRenderer.invoke('query:list', connId),
+    delete: (name, connId)          => ipcRenderer.invoke('query:delete', name, connId),
+  },
+  session: {
+    save: (s) => ipcRenderer.invoke('session:save', s),
+    load: ()  => ipcRenderer.invoke('session:load'),
   },
   dialog: {
     save: (name, content) => ipcRenderer.invoke('dialog:save', name, content),

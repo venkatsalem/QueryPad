@@ -64,26 +64,40 @@ function deleteQuery(name, connectionId) {
   return true;
 }
 
-// ── autosave ──────────────────────────────────────────────────────────────────
+// ── session (open tabs) ─────────────────────────────────────────────────────
+// The whole editor session — all open tabs + the active tab — is persisted to a
+// SINGLE file that is overwritten on each save. This replaces the old per-tab
+// `<tabId>.sql` autosave scheme, which leaked a new file on every launch because
+// tab IDs were regenerated each time and never cleaned up or restored.
 
-function autosaveDir() {
-  const d = path.join(dataDir(), 'autosave');
-  fs.mkdirSync(d, { recursive: true });
-  return d;
-}
+function sessionFile() { return path.join(dataDir(), 'session.json'); }
 
-function autosave(tabId, content) {
-  fs.writeFileSync(path.join(autosaveDir(), `${tabId}.sql`), content, 'utf8');
+function saveSession(session) {
+  fs.writeFileSync(sessionFile(), JSON.stringify(session, null, 2), 'utf8');
   return true;
 }
 
-function loadAutosaved(tabId) {
-  const f = path.join(autosaveDir(), `${tabId}.sql`);
-  return fs.existsSync(f) ? fs.readFileSync(f, 'utf8') : null;
+function loadSession() {
+  const f = sessionFile();
+  if (!fs.existsSync(f)) return null;
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (_) { return null; }
+}
+
+// One-time migration: delete legacy per-tab autosave files left by older builds.
+function cleanupLegacyAutosave() {
+  try {
+    const d = path.join(dataDir(), 'autosave');
+    if (!fs.existsSync(d)) return;
+    for (const f of fs.readdirSync(d)) {
+      if (f.endsWith('.sql')) fs.unlinkSync(path.join(d, f));
+    }
+    // Remove the now-empty directory if nothing else lives there.
+    if (fs.readdirSync(d).length === 0) fs.rmdirSync(d);
+  } catch (_) {}
 }
 
 module.exports = {
   loadConnections, saveConnection, deleteConnection,
   saveQuery, loadQuery, listQueries, deleteQuery,
-  autosave, loadAutosaved,
+  saveSession, loadSession, cleanupLegacyAutosave,
 };

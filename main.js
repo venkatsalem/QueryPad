@@ -41,6 +41,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'system';  // follow OS dark/light setting
+  try { require('./src/queryStore').cleanupLegacyAutosave(); } catch (_) {}
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -93,11 +94,11 @@ ipcMain.handle('query:list', (_, connectionId) =>
 ipcMain.handle('query:delete', (_, name, connectionId) =>
   require('./src/queryStore').deleteQuery(name, connectionId));
 
-ipcMain.handle('query:autosave', (_, tabId, content) =>
-  require('./src/queryStore').autosave(tabId, content));
+ipcMain.handle('session:save', (_, session) =>
+  require('./src/queryStore').saveSession(session));
 
-ipcMain.handle('query:load-autosaved', (_, tabId) =>
-  require('./src/queryStore').loadAutosaved(tabId));
+ipcMain.handle('session:load', () =>
+  require('./src/queryStore').loadSession());
 
 // ── File dialog handler ───────────────────────────────────────────────────────
 
