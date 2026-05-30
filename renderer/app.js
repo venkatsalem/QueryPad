@@ -576,11 +576,20 @@ function openNewConnModal() {
   openModal('conn-modal');
 }
 
+const PORT_DEFAULTS = { oracle: '1521', postgres: '5432', mysql: '3306' };
+
 function updateConnModalFields() {
   const type = document.getElementById('f-type').value;
-  const portDefaults = { oracle: '1521', postgres: '5432', mysql: '3306' };
   const port = document.getElementById('f-port');
-  if (!port.value) port.value = portDefaults[type] || '';
+
+  // Update the port whenever it's empty OR still holds another DB's default,
+  // so switching the Type always reflects the right port. A port the user
+  // typed themselves (not a known default) is left untouched.
+  const defaults = Object.values(PORT_DEFAULTS);
+  if (!port.value || defaults.includes(String(port.value))) {
+    port.value = PORT_DEFAULTS[type] || '';
+  }
+  port.placeholder = PORT_DEFAULTS[type] || '';
 
   const isOracle = type === 'oracle';
   document.getElementById('row-service').classList.toggle('hidden', !isOracle);
@@ -732,16 +741,11 @@ function wireEvents() {
   // Export modal
   document.getElementById('btn-confirm-export').onclick = confirmExport;
 
-  // Modal close buttons (data-close attribute)
+  // Modal close buttons (data-close attribute). Modals deliberately do NOT
+  // close on backdrop click or Escape — they stay open until the user clicks
+  // an explicit button (Cancel / Save / Download / ✕).
   document.querySelectorAll('[data-close]').forEach(btn => {
     btn.addEventListener('click', () => closeModal(btn.dataset.close));
-  });
-
-  // Backdrop click to close
-  document.querySelectorAll('.modal-backdrop').forEach(bd => {
-    bd.addEventListener('click', e => {
-      if (e.target === bd) closeModal(bd.id);
-    });
   });
 
   // Export dropdown toggles
@@ -766,11 +770,12 @@ function wireEvents() {
     });
   });
 
-  // Keyboard
+  // Keyboard — Escape closes transient popovers only, never the modals
+  // (those require an explicit button click).
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      document.querySelectorAll('.modal-backdrop:not(.hidden)').forEach(m => closeModal(m.id));
       closeDropdowns();
+      hideGridContextMenu();
     }
   });
 }
