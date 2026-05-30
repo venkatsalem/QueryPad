@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeTheme, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, nativeTheme, nativeImage, Menu } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -32,6 +32,7 @@ function createWindow() {
     },
     show: false,
     titleBarStyle: 'default',
+    autoHideMenuBar: true,   // hide the menu bar (no Alt-to-reveal once menu is null)
   });
 
   mainWindow.loadFile('renderer/index.html');
@@ -41,6 +42,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'system';  // follow OS dark/light setting
+  Menu.setApplicationMenu(null);       // remove the app menu bar entirely
   try { require('./src/queryStore').cleanupLegacyAutosave(); } catch (_) {}
   createWindow();
   app.on('activate', () => {
