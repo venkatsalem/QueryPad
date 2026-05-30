@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QueryPad</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300;0,14..32,400;0,14..32,500;0,14..32,600;1,14..32,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../node_modules/ag-grid-community/styles/ag-grid.css">
+  <link rel="stylesheet" href="../node_modules/ag-grid-community/styles/ag-theme-quartz.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────────── -->
+<aside id="sidebar">
+  <div id="sidebar-logo">
+    <span class="logo-q">Q</span><span class="logo-rest">ueryPad</span>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">
+      CONNECTIONS
+      <button id="btn-new-conn" title="Add connection">+</button>
+    </div>
+    <div id="connections-list"></div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-label">SAVED QUERIES</div>
+    <div id="queries-list"></div>
+  </div>
+</aside>
+
+<!-- ── Sidebar resize handle ──────────────────────────────────────────────── -->
+<div id="sidebar-handle"></div>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Tab bar -->
+  <div id="tab-bar">
+    <div id="tabs-scroll">
+      <div id="tabs"></div>
+    </div>
+    <button id="btn-new-tab" title="New query (Ctrl+T)">+</button>
+  </div>
+
+  <!-- Editor area -->
+  <div id="editor-wrap">
+    <div id="monaco-container"></div>
+    <div id="editor-bar">
+      <button id="btn-run" class="btn-run" title="Run (F5)">▶ Run</button>
+      <button id="btn-run-sel" class="btn-run-sel" title="Run selection (Shift+F5)">▶ Selection</button>
+      <button id="btn-save-q" title="Save query (Ctrl+S)">Save Query</button>
+      <div class="spacer"></div>
+      <span id="conn-label" class="dim">No connection</span>
+    </div>
+  </div>
+
+  <!-- Drag handle between editor and results -->
+  <div id="split-handle"></div>
+
+  <!-- Results panel -->
+  <div id="results-wrap">
+    <div id="results-bar">
+      <span id="results-info" class="dim">Ready</span>
+      <div class="spacer"></div>
+      <div class="dropdown" id="dd-all">
+        <button class="btn-export" id="btn-export-all" disabled>Export All ▾</button>
+        <div class="dropdown-menu">
+          <button data-action="all-csv">as CSV</button>
+          <button data-action="all-insert">as INSERT SQL</button>
+          <button data-action="all-update">as UPDATE SQL</button>
+        </div>
+      </div>
+      <div class="dropdown" id="dd-sel">
+        <button class="btn-export" id="btn-export-sel" disabled>Export Selected ▾</button>
+        <div class="dropdown-menu">
+          <button data-action="sel-csv">as CSV</button>
+          <button data-action="sel-insert">as INSERT SQL</button>
+          <button data-action="sel-update">as UPDATE SQL</button>
+        </div>
+      </div>
+    </div>
+    <div id="results-grid" class="ag-theme-quartz-dark"></div>
+    <div id="error-box" class="hidden"></div>
+  </div>
+
+</div>
+
+<!-- ── Status bar ─────────────────────────────────────────────────────────── -->
+<div id="status-bar">
+  <span id="st-conn">Not connected</span>
+  <span class="st-sep">|</span>
+  <span id="st-rows"></span>
+  <span class="st-sep" id="st-sep2" style="display:none">|</span>
+  <span id="st-time"></span>
+  <div class="spacer"></div>
+  <span id="st-save" class="dim">—</span>
+</div>
+
+<!-- ── Connection modal ───────────────────────────────────────────────────── -->
+<div id="conn-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-hd">
+      <span id="conn-modal-title">New Connection</span>
+      <button class="modal-x" data-close="conn-modal">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="field-row">
+        <label>Name</label>
+        <input type="text" id="f-name" placeholder="My Database" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <label>Type</label>
+        <select id="f-type">
+          <option value="oracle">Oracle</option>
+          <option value="postgres">PostgreSQL</option>
+          <option value="mysql">MySQL</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label>Host</label>
+        <input type="text" id="f-host" placeholder="localhost" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <label>Port</label>
+        <input type="number" id="f-port" placeholder="1521">
+      </div>
+      <div class="field-row" id="row-service">
+        <label>Service / SID</label>
+        <input type="text" id="f-service" placeholder="ORCL" autocomplete="off">
+      </div>
+      <div class="field-row hidden" id="row-db">
+        <label>Database</label>
+        <input type="text" id="f-db" placeholder="mydb" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <label>Username</label>
+        <input type="text" id="f-user" placeholder="username" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <label>Password</label>
+        <input type="password" id="f-pass" placeholder="••••••••">
+      </div>
+    </div>
+    <div class="modal-ft">
+      <button id="btn-test-conn" class="btn-secondary">Test Connection</button>
+      <span id="test-result" class="dim"></span>
+      <div class="spacer"></div>
+      <button id="btn-cancel-conn" class="btn-ghost" data-close="conn-modal">Cancel</button>
+      <button id="btn-save-conn" class="btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Save query modal ───────────────────────────────────────────────────── -->
+<div id="save-modal" class="modal-backdrop hidden">
+  <div class="modal modal-sm">
+    <div class="modal-hd">
+      <span>Save Query</span>
+      <button class="modal-x" data-close="save-modal">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="field-row">
+        <label>Name</label>
+        <input type="text" id="f-qname" placeholder="my-query" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-ft">
+      <div class="spacer"></div>
+      <button class="btn-ghost" data-close="save-modal">Cancel</button>
+      <button id="btn-confirm-save" class="btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Export modal ───────────────────────────────────────────────────────── -->
+<div id="export-modal" class="modal-backdrop hidden">
+  <div class="modal modal-sm">
+    <div class="modal-hd">
+      <span id="export-modal-title">Export</span>
+      <button class="modal-x" data-close="export-modal">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="field-row">
+        <label>Table Name</label>
+        <input type="text" id="f-tbl" placeholder="table_name" autocomplete="off">
+      </div>
+      <div class="field-row" id="row-key" style="display:none">
+        <label>Key Column (WHERE)</label>
+        <select id="f-key-col"></select>
+      </div>
+    </div>
+    <div class="modal-ft">
+      <div class="spacer"></div>
+      <button class="btn-ghost" data-close="export-modal">Cancel</button>
+      <button id="btn-confirm-export" class="btn-primary">Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Notification toast ─────────────────────────────────────────────────── -->
+<div id="toast" class="hidden"></div>
+
+<!-- scripts -->
+<!-- AG Grid MUST load before Monaco's loader.js: Monaco installs a global AMD
+     `define`, and AG Grid's UMD wrapper would then register as an AMD module
+     instead of setting the window.agGrid global. Order matters here. -->
+<script src="../node_modules/ag-grid-community/dist/ag-grid-community.min.noStyle.js"></script>
+<script src="../node_modules/monaco-editor/min/vs/loader.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

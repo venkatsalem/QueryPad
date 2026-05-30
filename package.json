@@ -1,0 +1,39 @@
+{
+  "name": "querypad",
+  "version": "0.1.0",
+  "description": "Clean SQL editor with smart export",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "dependencies": {
+    "oracledb": "^6.7.0",
+    "pg": "^8.13.0",
+    "mysql2": "^3.11.0",
+    "uuid": "^11.0.0",
+    "monaco-editor": "^0.52.0",
+    "ag-grid-community": "^32.3.3"
+  },
+  "devDependencies": {
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.querypad.app",
+    "productName": "QueryPad",
+    "asar": false,
+    "directories": { "output": "dist" },
+    "win": {
+      "target": [{ "target": "portable", "arch": ["x64"] }]
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!**/*.map",
+      "!**/test/**",
+      "!**/tests/**",
+      "!**/.git/**"
+    ]
+  }
+}
