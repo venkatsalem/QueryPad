@@ -2,30 +2,43 @@
   "name": "querypad",
   "version": "0.1.0",
   "description": "Clean SQL editor with smart export",
+  "author": "Venkat Sadasivam",
+  "license": "MIT",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "build": "electron-builder --win portable"
   },
   "dependencies": {
+    "ag-grid-community": "^32.3.3",
+    "monaco-editor": "^0.52.0",
+    "mysql2": "^3.11.0",
     "oracledb": "^6.7.0",
     "pg": "^8.13.0",
-    "mysql2": "^3.11.0",
-    "uuid": "^11.0.0",
-    "monaco-editor": "^0.52.0",
-    "ag-grid-community": "^32.3.3"
+    "uuid": "^11.0.0"
   },
   "devDependencies": {
     "electron": "^34.0.0",
-    "electron-builder": "^25.1.8"
+    "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.1"
   },
   "build": {
     "appId": "com.querypad.app",
     "productName": "QueryPad",
     "asar": false,
-    "directories": { "output": "dist" },
+    "directories": {
+      "output": "dist"
+    },
     "win": {
-      "target": [{ "target": "portable", "arch": ["x64"] }]
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "files": [
       "**/*",

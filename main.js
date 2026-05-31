@@ -2,9 +2,14 @@ const { app, BrowserWindow, ipcMain, dialog, nativeTheme, nativeImage, Menu } = 
 const path = require('path');
 const fs = require('fs');
 
-// Build a simple programmatic icon from the SVG (avoids binary .ico/.png requirement)
+// Window icon: prefer the high-res icon.png, fall back to the bundled SVG.
 function buildIcon() {
   try {
+    const pngPath = path.join(__dirname, 'icon.png');
+    if (fs.existsSync(pngPath)) {
+      const img = nativeImage.createFromPath(pngPath);
+      if (!img.isEmpty()) return img;
+    }
     const svgPath = path.join(__dirname, 'assets', 'icon.svg');
     if (fs.existsSync(svgPath)) {
       return nativeImage.createFromPath(svgPath);
