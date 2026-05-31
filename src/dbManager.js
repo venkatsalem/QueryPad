@@ -142,10 +142,57 @@ async function execute(id, sql) {
   }
 }
 
+// ── getSchema (for autocomplete) ────────────────────────────────────────────
+// Returns { tables: [name...], columns: { tableName: [col...] } } for the
+// current schema/database. Used to power editor table/column completion.
+
+async function getSchema(id) {
+  const entry = active.get(id);
+  if (!entry) return { tables: [], columns: {} };
+
+  const columns = {};
+  let tables = [];
+
+  if (entry.type === 'oracle') {
+    const db = require('oracledb');
+    const opt = { outFormat: db.OUT_FORMAT_OBJECT };
+    const t = await entry.conn.execute('SELECT table_name FROM user_tables ORDER BY table_name', [], opt);
+    const c = await entry.conn.execute(
+      'SELECT table_name, column_name FROM user_tab_columns ORDER BY table_name, column_id', [], opt);
+    tables = t.rows.map(r => r.TABLE_NAME);
+    for (const r of c.rows) (columns[r.TABLE_NAME] ||= []).push(r.COLUMN_NAME);
+
+  } else if (entry.type === 'postgres') {
+    const t = await entry.conn.query(
+      `SELECT table_name FROM information_schema.tables
+       WHERE table_schema NOT IN ('pg_catalog','information_schema')
+       ORDER BY table_name`);
+    const c = await entry.conn.query(
+      `SELECT table_name, column_name FROM information_schema.columns
+       WHERE table_schema NOT IN ('pg_catalog','information_schema')
+       ORDER BY table_name, ordinal_position`);
+    tables = t.rows.map(r => r.table_name);
+    for (const r of c.rows) (columns[r.table_name] ||= []).push(r.column_name);
+
+  } else if (entry.type === 'mysql') {
+    // Alias columns to fixed lowercase names — MySQL's info_schema casing varies.
+    const [tr] = await entry.conn.query(
+      `SELECT table_name AS t FROM information_schema.tables
+       WHERE table_schema = DATABASE() ORDER BY table_name`);
+    const [cr] = await entry.conn.query(
+      `SELECT table_name AS t, column_name AS c FROM information_schema.columns
+       WHERE table_schema = DATABASE() ORDER BY table_name, ordinal_position`);
+    tables = tr.map(r => r.t);
+    for (const r of cr) (columns[r.t] ||= []).push(r.c);
+  }
+
+  return { tables, columns };
+}
+
 // ── closeAll ──────────────────────────────────────────────────────────────────
 
 async function closeAll() {
   for (const [id] of active) await disconnect(id);
 }
 
-module.exports = { testConnection, connect, disconnect, execute, closeAll };
+module.exports = { testConnection, connect, disconnect, execute, getSchema, closeAll };

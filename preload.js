@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('querypad', {
   db: {
     testConnection: (cfg) => ipcRenderer.invoke('db:test-connection', cfg),
     execute:        (id, sql) => ipcRenderer.invoke('db:execute', id, sql),
+    getSchema:      (id) => ipcRenderer.invoke('db:get-schema', id),
     saveConnection: (cfg) => ipcRenderer.invoke('db:save-connection', cfg),
     loadConnections: () => ipcRenderer.invoke('db:load-connections'),
     deleteConnection: (id) => ipcRenderer.invoke('db:delete-connection', id),

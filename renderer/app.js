@@ -13,6 +13,7 @@ const state = {
   results: null,          // { columns, rows, rowData }
   nextTabNum: 1,
   pendingExport: null,    // { type, rows, columns }
+  schema: null,           // { tables: [...], columns: { table: [...] } } for autocomplete
 };
 
 let editor = null;     // Monaco instance
@@ -79,6 +80,8 @@ function initMonaco(onReady) {
     editor.addAction({ id: 'save-q',   label: 'Save Query',    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],  run: openSaveModal         });
     editor.addAction({ id: 'new-tab',  label: 'New Tab',       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyT],  run: () => createTab()     });
 
+    registerSqlCompletions();
+
     editor.onDidChangeModelContent(() => {
       if (!state.activeTabId) return;
       const tab = state.tabs.get(state.activeTabId);
@@ -92,6 +95,86 @@ function initMonaco(onReady) {
 
     onReady();
   });
+}
+
+// ── SQL autocomplete (table / column names from the live schema) ─────────────
+
+let completionsRegistered = false;
+
+// Pure helper (testable): given the line text up to the cursor and the loaded
+// schema, return the list of completion items to offer.
+function computeSqlCompletions(lineUpToCursor, schema) {
+  if (!schema || !Array.isArray(schema.tables)) return [];
+
+  // After "<name>." offer that table's columns (alias = table name).
+  const dot = /([\w$#]+)\.\s*[\w$#]*$/.exec(lineUpToCursor);
+  if (dot) {
+    const key = dot[1];
+    const cols = schema.columns[key]
+      || schema.columns[key.toUpperCase()]
+      || schema.columns[key.toLowerCase()];
+    if (cols && cols.length) {
+      return cols.map(c => ({ label: c, insertText: c, kind: 'Field', detail: 'column · ' + key }));
+    }
+  }
+
+  const out = [];
+  for (const t of schema.tables) {
+    out.push({ label: t, insertText: t, kind: 'Struct', detail: 'table', sortText: '0' + t });
+  }
+  // Distinct column names across all tables, ranked below tables.
+  const seen = new Set();
+  for (const [, cols] of Object.entries(schema.columns)) {
+    for (const c of cols) {
+      if (seen.has(c)) continue;
+      seen.add(c);
+      out.push({ label: c, insertText: c, kind: 'Field', detail: 'column', sortText: '1' + c });
+    }
+  }
+  return out;
+}
+
+function registerSqlCompletions() {
+  if (completionsRegistered || !window.monaco) return;
+  completionsRegistered = true;
+
+  monaco.languages.registerCompletionItemProvider('sql', {
+    triggerCharacters: ['.', ' '],
+    provideCompletionItems(model, position) {
+      const word = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endColumn: word.endColumn,
+      };
+      const lineUpToCursor = model.getValueInRange({
+        startLineNumber: position.lineNumber, startColumn: 1,
+        endLineNumber: position.lineNumber, endColumn: position.column,
+      });
+      const K = monaco.languages.CompletionItemKind;
+      const suggestions = computeSqlCompletions(lineUpToCursor, state.schema).map(it => ({
+        label: it.label,
+        kind: it.kind === 'Field' ? K.Field : K.Struct,
+        insertText: it.insertText,
+        detail: it.detail,
+        sortText: it.sortText,
+        range,
+      }));
+      return { suggestions };
+    },
+  });
+}
+
+async function loadSchema(connId) {
+  try {
+    const schema = await window.querypad.db.getSchema(connId);
+    state.schema = schema;
+    const n = schema.tables ? schema.tables.length : 0;
+    if (n) showToast(`Loaded ${n} table${n !== 1 ? 's' : ''} for autocomplete`);
+  } catch (e) {
+    state.schema = null;
+  }
 }
 
 // ── AG Grid ──────────────────────────────────────────────────────────────────
@@ -355,6 +438,7 @@ async function activateConnection(conn) {
     setActiveConnection(conn.id);
     await renderQueriesList();
     showToast('Connected to ' + conn.name);
+    loadSchema(conn.id);   // fire-and-forget; populates editor autocomplete
   } catch (e) {
     showToast('Connection failed: ' + e.message, true);
   }

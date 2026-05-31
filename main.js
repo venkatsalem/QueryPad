@@ -82,6 +82,9 @@ ipcMain.handle('db:disconnect', (_, id) =>
 ipcMain.handle('db:execute', (_, connectionId, sql) =>
   require('./src/dbManager').execute(connectionId, sql));
 
+ipcMain.handle('db:get-schema', (_, connectionId) =>
+  require('./src/dbManager').getSchema(connectionId));
+
 // ── Query store handlers ──────────────────────────────────────────────────────
 
 ipcMain.handle('query:save', (_, name, connectionId, content) =>
