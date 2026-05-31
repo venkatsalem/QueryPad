@@ -157,7 +157,8 @@ body {
 }
 .conn-item:hover .item-del,
 .conn-item:hover .item-edit,
-.query-item:hover .item-del { color: var(--text-dim); }
+.query-item:hover .item-del,
+.query-item:hover .item-edit { color: var(--text-dim); }
 .item-del:hover  { color: var(--red) !important; }
 .item-edit:hover { color: var(--accent) !important; }
 
@@ -198,20 +199,23 @@ body {
 #tabs-scroll::-webkit-scrollbar { height: 3px; }
 #tabs-scroll::-webkit-scrollbar-thumb { background: var(--border); }
 
-#tabs { display: flex; align-items: stretch; }
+#tabs { display: flex; align-items: flex-end; gap: 3px; padding: 4px 0 0 6px; }
 
 .tab {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px 0 14px;
+  padding: 0 10px 0 14px;
+  height: calc(var(--tab-h) - 6px);
   min-width: 100px;
   max-width: 180px;
-  border-right: 1px solid var(--border);
   background: var(--bg-tab);
   cursor: pointer;
   font-size: 12.5px;
   color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 9px 9px 0 0;     /* Chrome-style rounded top corners */
   transition: background 0.1s, color 0.1s;
   position: relative;
 }
@@ -219,7 +223,16 @@ body {
 .tab.active {
   background: var(--bg-tab-act);
   color: var(--text-bright);
-  border-top: 2px solid var(--accent);
+  border-color: var(--accent);
+  border-bottom: none;
+}
+.tab.active::after {
+  /* mask the 1px seam so the active tab blends into the editor below */
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -1px;
+  height: 2px;
+  background: var(--bg-tab-act);
 }
 .tab.dirty .tab-name::after { content: '●'; margin-left: 4px; font-size: 8px; color: var(--text-dim); }
 
@@ -248,12 +261,20 @@ body {
 .tab-x:hover { color: var(--text-bright) !important; background: var(--bg-input); }
 
 #btn-new-tab {
+  flex-shrink: 0;
+  align-self: center;
+  margin: 0 4px 2px 4px;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
-  border-left: 1px solid var(--border);
+  border-radius: 6px;
   color: var(--text-dim);
   font-size: 18px;
-  padding: 0 14px;
+  line-height: 1;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }

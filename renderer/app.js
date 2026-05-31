@@ -388,12 +388,22 @@ async function renderQueriesList() {
     span.className = 'query-name';
     span.textContent = name;
 
+    const rename = document.createElement('button');
+    rename.className = 'item-edit';
+    rename.textContent = '✎';
+    rename.title = 'Rename saved query';
+    rename.onclick = (e) => {
+      e.stopPropagation();
+      openRenameModal(name);
+    };
+
     const del = document.createElement('button');
     del.className = 'item-del';
     del.textContent = '×';
     del.title = 'Delete saved query';
     del.onclick = async (e) => {
       e.stopPropagation();
+      if (!confirm(`Delete saved query "${name}"?`)) return;
       await window.querypad.query.delete(name, state.activeConnId);
       await renderQueriesList();
     };
@@ -402,8 +412,10 @@ async function renderQueriesList() {
       const content = await window.querypad.query.load(name, state.activeConnId);
       if (content !== null) createTab(name + '.sql', content);
     };
+    row.ondblclick = () => openRenameModal(name);
 
     row.appendChild(span);
+    row.appendChild(rename);
     row.appendChild(del);
     el.appendChild(row);
   }
@@ -775,6 +787,45 @@ async function confirmSaveQuery() {
   showToast('Saved as ' + name + '.sql');
 }
 
+// ── Rename saved query modal ───────────────────────────────────────────────────
+
+let renamingQuery = null;
+
+function openRenameModal(name) {
+  renamingQuery = name;
+  const input = document.getElementById('f-rename');
+  input.value = name;
+  openModal('rename-modal');
+  setTimeout(() => input.select(), 50);
+}
+
+async function confirmRenameQuery() {
+  const oldName = renamingQuery;
+  const newName = document.getElementById('f-rename').value.trim();
+  if (!oldName) return;
+  if (!newName) { showToast('Name is required', true); return; }
+  if (newName === oldName) { closeModal('rename-modal'); return; }
+
+  const existing = await window.querypad.query.list(state.activeConnId);
+  if (existing.includes(newName)) { showToast('A query with that name already exists', true); return; }
+
+  // No backend rename — compose from load + save-under-new-name + delete-old.
+  const content = await window.querypad.query.load(oldName, state.activeConnId);
+  await window.querypad.query.save(newName, state.activeConnId, content ?? '');
+  await window.querypad.query.delete(oldName, state.activeConnId);
+
+  // Keep any open tab that pointed at the old saved query in sync.
+  for (const tab of state.tabs.values()) {
+    if (tab.name === oldName + '.sql') { tab.name = newName + '.sql'; }
+  }
+  renderTabBar();
+  scheduleAutosave();
+
+  await renderQueriesList();
+  closeModal('rename-modal');
+  showToast(`Renamed to ${newName}.sql`);
+}
+
 // ── Modal helpers ─────────────────────────────────────────────────────────────
 
 function openModal(id)  { document.getElementById(id).classList.remove('hidden'); }
@@ -850,6 +901,12 @@ function wireEvents() {
   document.getElementById('btn-confirm-save').onclick = confirmSaveQuery;
   document.getElementById('f-qname').addEventListener('keydown', e => {
     if (e.key === 'Enter') confirmSaveQuery();
+  });
+
+  // Rename query modal
+  document.getElementById('btn-confirm-rename').onclick = confirmRenameQuery;
+  document.getElementById('f-rename').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmRenameQuery();
   });
 
   // Export modal

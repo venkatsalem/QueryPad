@@ -43,8 +43,8 @@
   <div id="tab-bar">
     <div id="tabs-scroll">
       <div id="tabs"></div>
+      <button id="btn-new-tab" title="New query (Ctrl+T)">+</button>
     </div>
-    <button id="btn-new-tab" title="New query (Ctrl+T)">+</button>
   </div>
 
   <!-- Editor area -->
@@ -173,6 +173,27 @@
       <div class="spacer"></div>
       <button class="btn-ghost" data-close="save-modal">Cancel</button>
       <button id="btn-confirm-save" class="btn-primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Rename saved query modal ───────────────────────────────────────────── -->
+<div id="rename-modal" class="modal-backdrop hidden">
+  <div class="modal modal-sm">
+    <div class="modal-hd">
+      <span>Rename Query</span>
+      <button class="modal-x" data-close="rename-modal">✕</button>
+    </div>
+    <div class="modal-bd">
+      <div class="field-row">
+        <label>New name</label>
+        <input type="text" id="f-rename" placeholder="new-name" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-ft">
+      <div class="spacer"></div>
+      <button class="btn-ghost" data-close="rename-modal">Cancel</button>
+      <button id="btn-confirm-rename" class="btn-primary">Rename</button>
     </div>
   </div>
 </div>
