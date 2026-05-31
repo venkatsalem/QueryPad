@@ -23,7 +23,11 @@
   --bar-h:        36px;
   --status-h:     24px;
   --sidebar-w:    220px;
-  --font-ui:      'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* UI font: prefer Google Sans Flex (proprietary, must be installed or bundled
+     locally — not on the Google Fonts API), gracefully fall back to Inter,
+     which is web-loaded in index.html so the UI always looks polished. */
+  --font-ui:      'Google Sans Flex', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  /* SQL / editor font — unchanged. */
   --font-mono:    'Google Sans Code Monospace', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
 }
 
@@ -241,7 +245,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
   font-size: 12px;
 }
 
@@ -345,7 +349,7 @@ body {
 
 #conn-label {
   font-size: 12px;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui);
 }
 
 /* ── Split handle ──────────────────────────────────────────────────────────── */
