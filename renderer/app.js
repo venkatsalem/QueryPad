@@ -24,6 +24,13 @@ let restoring = false; // true while rebuilding tabs from a saved session
 
 // ── Boot ─────────────────────────────────────────────────────────────────────
 
+// Global safety net — catch unhandled JS errors and promise rejections so
+// the user sees a toast instead of the app silently going wrong.
+window.addEventListener('error', e =>
+  showToast('Unexpected error: ' + e.message, true));
+window.addEventListener('unhandledrejection', e =>
+  showToast('Unexpected error: ' + (e.reason?.message ?? String(e.reason)), true));
+
 document.addEventListener('DOMContentLoaded', () => {
   // Wire events + resizers FIRST so buttons always work, even if a
   // library (AG Grid / Monaco) fails to load below.
@@ -185,6 +192,8 @@ async function loadSchema(connId) {
     if (n) showToast(`Loaded ${n} table${n !== 1 ? 's' : ''} for autocomplete`);
   } catch (e) {
     state.schema = null;
+    console.warn('Schema load failed:', e);
+    showToast('Table autocomplete unavailable', true);
   }
 }
 
@@ -481,6 +490,7 @@ function setActiveConnection(id) {
     ? `${conn.name} · ${conn.type}`
     : 'Not connected';
   renderConnectionsList();
+  renderHistoryList();
 }
 
 // ── Saved queries sidebar ─────────────────────────────────────────────────────
@@ -545,11 +555,11 @@ async function runQuery(selectionOnly) {
   if (!sql) { showToast('Nothing to run'); return; }
   if (!state.activeConnId) { showToast('Select a connection first', true); return; }
 
-  setStatus('Running…');
   hideError();
   clearResults();
   document.getElementById('btn-export-all').disabled = true;
   document.getElementById('btn-export-sel').disabled = true;
+  setStatus('Running…');  // after clearResults so it isn't immediately overwritten
 
   try {
     const result = await window.querypad.db.execute(state.activeConnId, sql);
@@ -566,11 +576,50 @@ async function runQuery(selectionOnly) {
         `${result.rowsAffected ?? 0} row${(result.rowsAffected ?? 0) !== 1 ? 's' : ''} affected · ${result.elapsed}ms`;
       document.getElementById('st-rows').textContent = `${result.rowsAffected ?? 0} rows affected`;
     }
-    setStatus('');
   } catch (e) {
-    showError(e.message);
+    showError(sanitizeErrorMsg(e.message));
     document.getElementById('results-info').textContent = 'Error';
-    setStatus('Error');
+  }
+
+  // Record in history regardless of success or failure
+  window.querypad.history.append(state.activeConnId, sql)
+    .then(() => renderHistoryList())
+    .catch(() => {});
+}
+
+// ── Query history ─────────────────────────────────────────────────────────────
+
+async function renderHistoryList() {
+  const el = document.getElementById('history-list');
+  if (!state.activeConnId) { el.innerHTML = ''; return; }
+
+  const items = await window.querypad.history.load(state.activeConnId);
+  el.innerHTML = '';
+  for (const item of items) {
+    const row = document.createElement('div');
+    row.className = 'history-item';
+    row.title = item.sql;
+
+    const time = document.createElement('span');
+    time.className = 'history-time';
+    const d = new Date(item.ts);
+    time.textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const sql = document.createElement('span');
+    sql.className = 'history-sql';
+    sql.textContent = item.sql.replace(/\s+/g, ' ').trim();
+
+    row.onclick = () => {
+      if (!editor) return;
+      editor.setValue(item.sql);
+      const tab = state.tabs.get(state.activeTabId);
+      if (tab) { tab.content = item.sql; tab.dirty = true; renderTabBar(); }
+      editor.focus();
+    };
+
+    row.appendChild(time);
+    row.appendChild(sql);
+    el.appendChild(row);
   }
 }
 
@@ -1012,6 +1061,11 @@ function wireEvents() {
   document.getElementById('btn-run-sel').onclick    = () => runQuery(true);
   document.getElementById('btn-save-q').onclick     = openSaveModal;
   document.getElementById('btn-new-conn').onclick   = openNewConnModal;
+  document.getElementById('btn-clear-history').onclick = async () => {
+    if (!state.activeConnId) return;
+    await window.querypad.history.clear(state.activeConnId);
+    renderHistoryList();
+  };
 
   // Connection modal
   document.getElementById('f-type').onchange        = updateConnModalFields;
@@ -1112,7 +1166,13 @@ function closeDropdowns() {
 }
 
 function setStatus(msg) {
-  // reflected in status bar implicitly via st-conn / st-rows
+  if (msg) document.getElementById('results-info').textContent = msg;
+}
+
+// Redact credential patterns like "user:password@host" that DB drivers
+// sometimes include verbatim in error messages.
+function sanitizeErrorMsg(msg) {
+  return String(msg).replace(/:[^/:@\s]+@/g, ':***@');
 }
 
 function showToast(msg, isError) {

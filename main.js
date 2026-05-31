@@ -14,7 +14,7 @@ function buildIcon() {
     if (fs.existsSync(svgPath)) {
       return nativeImage.createFromPath(svgPath);
     }
-  } catch (_) {}
+  } catch (e) { console.warn('buildIcon failed:', e); }
   return undefined;
 }
 
@@ -48,7 +48,7 @@ function createWindow() {
 app.whenReady().then(() => {
   nativeTheme.themeSource = 'system';  // follow OS dark/light setting
   Menu.setApplicationMenu(null);       // remove the app menu bar entirely
-  try { require('./src/queryStore').cleanupLegacyAutosave(); } catch (_) {}
+  try { require('./src/queryStore').cleanupLegacyAutosave(); } catch (e) { console.warn('Legacy autosave cleanup failed:', e); }
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -56,7 +56,7 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  try { require('./src/dbManager').closeAll(); } catch (_) {}
+  try { require('./src/dbManager').closeAll(); } catch (e) { console.error('Failed to close DB connections on exit:', e); }
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -109,6 +109,17 @@ ipcMain.handle('session:save', (_, session) =>
 
 ipcMain.handle('session:load', () =>
   require('./src/queryStore').loadSession());
+
+// ── History handlers ──────────────────────────────────────────────────────────
+
+ipcMain.handle('history:append', (_, connId, sql) =>
+  require('./src/queryStore').appendHistory(connId, sql));
+
+ipcMain.handle('history:load', (_, connId) =>
+  require('./src/queryStore').loadHistory(connId));
+
+ipcMain.handle('history:clear', (_, connId) =>
+  require('./src/queryStore').clearHistory(connId));
 
 // ── File dialog handler ───────────────────────────────────────────────────────
 

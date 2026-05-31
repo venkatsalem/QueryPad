@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld('querypad', {
     save: (s) => ipcRenderer.invoke('session:save', s),
     load: ()  => ipcRenderer.invoke('session:load'),
   },
+  history: {
+    append: (connId, sql) => ipcRenderer.invoke('history:append', connId, sql),
+    load:   (connId)      => ipcRenderer.invoke('history:load',   connId),
+    clear:  (connId)      => ipcRenderer.invoke('history:clear',  connId),
+  },
   dialog: {
     save: (name, content) => ipcRenderer.invoke('dialog:save', name, content),
   },

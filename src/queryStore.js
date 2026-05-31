@@ -13,7 +13,7 @@ function connectionsFile() { return path.join(dataDir(), 'connections.json'); }
 
 function read(file) {
   if (!fs.existsSync(file)) return [];
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (_) { return []; }
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { console.error('Failed to read', file, e); return []; }
 }
 
 // ── connections ───────────────────────────────────────────────────────────────
@@ -80,7 +80,7 @@ function saveSession(session) {
 function loadSession() {
   const f = sessionFile();
   if (!fs.existsSync(f)) return null;
-  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (_) { return null; }
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (e) { console.error('Failed to read session:', e); return null; }
 }
 
 // One-time migration: delete legacy per-tab autosave files left by older builds.
@@ -93,11 +93,43 @@ function cleanupLegacyAutosave() {
     }
     // Remove the now-empty directory if nothing else lives there.
     if (fs.readdirSync(d).length === 0) fs.rmdirSync(d);
-  } catch (_) {}
+  } catch (e) { console.warn('Legacy autosave cleanup error:', e); }
+}
+
+// ── query history (per connection, last 50) ───────────────────────────────────
+
+const HISTORY_MAX = 50;
+
+function historyFile(connId) {
+  const d = path.join(dataDir(), 'history');
+  fs.mkdirSync(d, { recursive: true });
+  return path.join(d, `${connId}.json`);
+}
+
+function loadHistory(connId) {
+  const f = historyFile(connId);
+  if (!fs.existsSync(f)) return [];
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch (_) { return []; }
+}
+
+function appendHistory(connId, sql) {
+  const list = loadHistory(connId);
+  // Remove any existing entry with the same SQL so it floats back to the top
+  // (shell-history style: 50 unique statements, most-recently-used first).
+  const existing = list.findIndex(e => e.sql === sql);
+  if (existing >= 0) list.splice(existing, 1);
+  list.unshift({ sql, ts: Date.now() });
+  if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
+  fs.writeFileSync(historyFile(connId), JSON.stringify(list, null, 2));
+}
+
+function clearHistory(connId) {
+  fs.writeFileSync(historyFile(connId), '[]');
 }
 
 module.exports = {
   loadConnections, saveConnection, deleteConnection,
   saveQuery, loadQuery, listQueries, deleteQuery,
   saveSession, loadSession, cleanupLegacyAutosave,
+  loadHistory, appendHistory, clearHistory,
 };
