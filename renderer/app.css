@@ -124,7 +124,14 @@ body {
   transition: background 0.1s;
 }
 .conn-item:hover, .query-item:hover { background: var(--bg-hover); }
-.conn-item.active { background: var(--accent-light); color: var(--text-bright); }
+.conn-item.active {
+  background: var(--accent);
+  color: #fff;
+  border-left: 3px solid rgba(0,0,0,0.2);
+  padding-left: 11px;
+}
+.conn-item.active:hover { background: var(--accent-hover); }
+.conn-item.active .conn-type-badge { color: rgba(255,255,255,0.7); }
 
 .conn-dot {
   width: 8px; height: 8px;
@@ -159,8 +166,6 @@ body {
   flex-shrink: 0;
   transition: color 0.1s;
 }
-.conn-item:hover .item-del,
-.conn-item:hover .item-edit,
 .query-item:hover .item-del,
 .query-item:hover .item-edit { color: var(--text-dim); }
 .item-del:hover  { color: var(--red) !important; }
@@ -246,38 +251,44 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-family: var(--font-ui);
-  font-size: 12px;
+  font-size: 12.5px;
 }
 
 .tab-x {
   background: none;
   border: none;
   color: transparent;
-  font-size: 14px;
+  font-family: var(--font-ui);
+  font-size: 11px;
   cursor: pointer;
-  padding: 0 2px;
-  border-radius: 2px;
-  line-height: 1;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
   flex-shrink: 0;
-  transition: color 0.1s, background 0.1s;
+  transition: color 0.15s, background 0.15s;
 }
-.tab:hover .tab-x { color: var(--text-dim); }
-.tab-x:hover { color: var(--text-bright) !important; background: var(--bg-input); }
+.tab:hover .tab-x,
+.tab.active .tab-x { color: var(--text-dim); }
+.tab-x:hover { color: var(--text-bright) !important; background: rgba(128,128,128,0.2); }
 
 #btn-new-tab {
   flex-shrink: 0;
   align-self: center;
   margin: 0 4px 2px 4px;
-  width: 26px;
-  height: 26px;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   color: var(--text-dim);
-  font-size: 18px;
+  font-family: var(--font-ui);
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -350,6 +361,10 @@ body {
 #conn-label {
   font-size: 12px;
   font-family: var(--font-ui);
+  padding-right: 10px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
 }
 
 /* ── Split handle ──────────────────────────────────────────────────────────── */
@@ -411,7 +426,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px;
-  min-width: 170px;
+  min-width: 190px;
   z-index: 200;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
@@ -432,6 +447,7 @@ body {
   transition: background 0.1s;
 }
 .dropdown-menu button:hover { background: var(--bg-hover); }
+.dropdown-sep { height: 1px; background: var(--border); margin: 4px 2px; }
 
 #results-grid {
   flex: 1;

@@ -373,7 +373,7 @@ function renderTabBar() {
 
     const x = document.createElement('button');
     x.className = 'tab-x';
-    x.textContent = '×';
+    x.textContent = '✕';
     x.onclick = (e) => { e.stopPropagation(); closeTab(id); };
 
     el.appendChild(name);
@@ -409,36 +409,52 @@ function renderConnectionsList() {
     badge.className = 'conn-type-badge';
     badge.textContent = { oracle: 'ORA', postgres: 'PG', mysql: 'MY' }[conn.type] || '';
 
-    const edit = document.createElement('button');
-    edit.className = 'item-edit';
-    edit.textContent = '✎';
-    edit.title = 'Edit connection';
-    edit.onclick = (e) => {
-      e.stopPropagation();
-      openEditConnModal(conn);
-    };
-
-    const del = document.createElement('button');
-    del.className = 'item-del';
-    del.textContent = '×';
-    del.title = 'Remove connection';
-    del.onclick = async (e) => {
-      e.stopPropagation();
-      if (!confirm(`Delete connection "${conn.name}"?`)) return;
-      await window.querypad.db.deleteConnection(conn.id);
-      if (state.activeConnId === conn.id) setActiveConnection(null);
-      await loadConnections();
-    };
-
     row.onclick = () => activateConnection(conn);
     row.ondblclick = () => openEditConnModal(conn);
+    row.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      showConnContextMenu(e.clientX, e.clientY, conn);
+    });
     row.appendChild(dot);
     row.appendChild(name);
     row.appendChild(badge);
-    row.appendChild(edit);
-    row.appendChild(del);
     el.appendChild(row);
   }
+}
+
+function showConnContextMenu(x, y, conn) {
+  hideConnContextMenu();
+  const menu = document.createElement('div');
+  menu.id = 'conn-ctx-menu';
+  menu.className = 'ctx-menu';
+  menu.innerHTML = `
+    <div class="ctx-label">${conn.name}</div>
+    <button data-action="edit">Edit connection</button>
+    <button data-action="delete">Delete connection</button>
+  `;
+  menu.querySelectorAll('button').forEach(btn => {
+    btn.onclick = async () => {
+      hideConnContextMenu();
+      if (btn.dataset.action === 'edit') {
+        openEditConnModal(conn);
+      } else {
+        if (!confirm(`Delete connection "${conn.name}"?`)) return;
+        await window.querypad.db.deleteConnection(conn.id);
+        if (state.activeConnId === conn.id) setActiveConnection(null);
+        await loadConnections();
+      }
+    };
+  });
+  document.body.appendChild(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = Math.min(x, window.innerWidth  - r.width  - 8) + 'px';
+  menu.style.top  = Math.min(y, window.innerHeight - r.height - 8) + 'px';
+  setTimeout(() => document.addEventListener('click', hideConnContextMenu, { once: true }), 0);
+}
+
+function hideConnContextMenu() {
+  const m = document.getElementById('conn-ctx-menu');
+  if (m) m.remove();
 }
 
 async function activateConnection(conn) {
@@ -606,7 +622,7 @@ function hideError() {
 
 // ── Export ────────────────────────────────────────────────────────────────────
 
-function triggerExport(type, selectedOnly) {
+function triggerExport(type, selectedOnly, copyMode = false) {
   if (!state.results) return;
   closeDropdowns();
 
@@ -622,16 +638,22 @@ function triggerExport(type, selectedOnly) {
   }
 
   if (type === 'csv') {
-    const name = guessTableName();
-    downloadContent(generateCSV(columns, rows), `${name}.csv`, 'text/csv');
+    if (copyMode) {
+      navigator.clipboard.writeText(generateCSV(columns, rows))
+        .then(() => showToast('Copied ' + rows.length + ' rows as CSV'));
+    } else {
+      downloadContent(generateCSV(columns, rows), `${guessTableName()}.csv`, 'text/csv');
+    }
     return;
   }
 
-  // INSERT / UPDATE need modal
-  state.pendingExport = { type, rows, columns };
+  // INSERT / UPDATE need table-name modal
+  state.pendingExport = { type, rows, columns, copyMode };
 
-  const titles = { insert: 'Export as INSERT SQL', update: 'Export as UPDATE SQL' };
-  document.getElementById('export-modal-title').textContent = titles[type];
+  const verb = copyMode ? 'Copy' : 'Export';
+  const labels = { insert: `${verb} as INSERT SQL`, update: `${verb} as UPDATE SQL` };
+  document.getElementById('export-modal-title').textContent = labels[type];
+  document.getElementById('btn-confirm-export').textContent = copyMode ? 'Copy' : 'Download';
   document.getElementById('f-tbl').value = guessTableName();
 
   const keyRow = document.getElementById('row-key');
@@ -647,7 +669,7 @@ function triggerExport(type, selectedOnly) {
 }
 
 function confirmExport() {
-  const { type, rows, columns } = state.pendingExport;
+  const { type, rows, columns, copyMode } = state.pendingExport;
   const table  = document.getElementById('f-tbl').value.trim() || 'table_name';
   const keyCol = document.getElementById('f-key-col').value;
 
@@ -660,7 +682,12 @@ function confirmExport() {
     filename = `${table}_update.sql`;
   }
 
-  downloadContent(content, filename);
+  if (copyMode) {
+    navigator.clipboard.writeText(content)
+      .then(() => showToast('Copied ' + rows.length + ' rows as ' + type.toUpperCase() + ' SQL'));
+  } else {
+    downloadContent(content, filename);
+  }
   closeModal('export-modal');
 }
 
@@ -1031,8 +1058,10 @@ function wireEvents() {
   document.querySelectorAll('.dropdown-menu button[data-action]').forEach(btn => {
     btn.addEventListener('click', () => {
       const a = btn.dataset.action;
-      const [scope, type] = a.split('-');
-      triggerExport(type, scope === 'sel');
+      const copyMode = a.endsWith('-copy');
+      const base = copyMode ? a.slice(0, -5) : a;
+      const [scope, type] = base.split('-');
+      triggerExport(type, scope === 'sel', copyMode);
     });
   });
 
@@ -1042,6 +1071,7 @@ function wireEvents() {
     if (e.key === 'Escape') {
       closeDropdowns();
       hideGridContextMenu();
+      hideConnContextMenu();
     }
   });
 

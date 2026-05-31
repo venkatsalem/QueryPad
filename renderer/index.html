@@ -51,11 +51,10 @@
   <div id="editor-wrap">
     <div id="monaco-container"></div>
     <div id="editor-bar">
+      <span id="conn-label" class="dim">No connection</span>
       <button id="btn-run" class="btn-run" title="Run (F5)">▶ Run</button>
       <button id="btn-run-sel" class="btn-run-sel" title="Run selection (Shift+F5)">▶ Selection</button>
       <button id="btn-save-q" title="Save query (Ctrl+S)">Save Query</button>
-      <div class="spacer"></div>
-      <span id="conn-label" class="dim">No connection</span>
     </div>
   </div>
 
@@ -70,17 +69,25 @@
       <div class="dropdown" id="dd-all">
         <button class="btn-export" id="btn-export-all" disabled>Export All ▾</button>
         <div class="dropdown-menu">
-          <button data-action="all-csv">as CSV</button>
-          <button data-action="all-insert">as INSERT SQL</button>
-          <button data-action="all-update">as UPDATE SQL</button>
+          <button data-action="all-csv-copy">Copy as CSV</button>
+          <button data-action="all-insert-copy">Copy as INSERT SQL</button>
+          <button data-action="all-update-copy">Copy as UPDATE SQL</button>
+          <div class="dropdown-sep"></div>
+          <button data-action="all-csv">Save as CSV</button>
+          <button data-action="all-insert">Save as INSERT SQL</button>
+          <button data-action="all-update">Save as UPDATE SQL</button>
         </div>
       </div>
       <div class="dropdown" id="dd-sel">
         <button class="btn-export" id="btn-export-sel" disabled>Export Selected ▾</button>
         <div class="dropdown-menu">
-          <button data-action="sel-csv">as CSV</button>
-          <button data-action="sel-insert">as INSERT SQL</button>
-          <button data-action="sel-update">as UPDATE SQL</button>
+          <button data-action="sel-csv-copy">Copy as CSV</button>
+          <button data-action="sel-insert-copy">Copy as INSERT SQL</button>
+          <button data-action="sel-update-copy">Copy as UPDATE SQL</button>
+          <div class="dropdown-sep"></div>
+          <button data-action="sel-csv">Save as CSV</button>
+          <button data-action="sel-insert">Save as INSERT SQL</button>
+          <button data-action="sel-update">Save as UPDATE SQL</button>
         </div>
       </div>
     </div>
@@ -218,7 +225,7 @@
     <div class="modal-ft">
       <div class="spacer"></div>
       <button class="btn-ghost" data-close="export-modal">Cancel</button>
-      <button id="btn-confirm-export" class="btn-primary">Download</button>
+      <button id="btn-confirm-export" class="btn-primary">Copy</button>
     </div>
   </div>
 </div>
