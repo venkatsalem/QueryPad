@@ -7,6 +7,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "icon": "node build/gen-icon.js",
+    "package": "electron-packager . QueryPad --platform=win32 --arch=x64 --out=dist --overwrite --icon=build/icon.ico --app-version=0.1.0 --asar.unpackDir=\"node_modules/oracledb\" --ignore=\"^/dist$\" --ignore=\"(^/\\.git)\"",
     "build": "electron-builder --win portable"
   },
   "dependencies": {
@@ -18,6 +20,7 @@
     "uuid": "^11.0.0"
   },
   "devDependencies": {
+    "@electron/packager": "^20.0.0",
     "electron": "^34.0.0",
     "electron-builder": "^25.1.8",
     "png-to-ico": "^3.0.1"
