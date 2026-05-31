@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Extract version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $v = '${{ github.ref_name }}' -replace '^v', ''
+          "value=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Stamp version into package.json
+        shell: pwsh
+        run: |
+          $v = '${{ steps.ver.outputs.value }}'
+          $content = Get-Content package.json -Raw
+          $content = $content -replace '"version":\s*"[^"]*"', ('"version": "' + $v + '"')
+          Set-Content package.json $content -NoNewline -Encoding utf8
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build release package
+        run: npm run package
+
+      - name: Zip artifact
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\QueryPad-win32-x64\*" `
+            -DestinationPath "QueryPad-${{ steps.ver.outputs.value }}-windows-x64.zip"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: QueryPad v${{ steps.ver.outputs.value }}
+          generate_release_notes: true
+          files: QueryPad-${{ steps.ver.outputs.value }}-windows-x64.zip
