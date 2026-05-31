@@ -75,6 +75,17 @@ function initMonaco(onReady) {
       padding: { top: 10, bottom: 10 },
     });
 
+    // Monaco measures glyph widths ONCE at creation. The SQL font (JetBrains
+    // Mono) loads asynchronously from Google Fonts, so the first measurement
+    // uses a fallback with different metrics — making the caret drift out of
+    // sync with the text. Re-measure once the web fonts are actually ready,
+    // and again as a safety net shortly after.
+    const remeasure = () => { try { window.monaco.editor.remeasureFonts(); } catch (_) {} };
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(remeasure);
+    }
+    setTimeout(remeasure, 800);
+
     editor.addAction({ id: 'run-all',  label: 'Run',           keybindings: [monaco.KeyCode.F5],                           run: () => runQuery(false) });
     editor.addAction({ id: 'run-sel',  label: 'Run Selection', keybindings: [monaco.KeyMod.Shift | monaco.KeyCode.F5],      run: () => runQuery(true)  });
     editor.addAction({ id: 'save-q',   label: 'Save Query',    keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],  run: openSaveModal         });
