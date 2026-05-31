@@ -377,7 +377,10 @@ body {
 .dropdown-menu {
   display: none;
   position: absolute;
-  bottom: calc(100% + 4px);
+  /* The export buttons live in the results bar at the TOP of the results
+     panel, so the menu must drop DOWN into the grid (opening upward gets
+     clipped by the editor area's overflow:hidden above the bar). */
+  top: calc(100% + 4px);
   right: 0;
   background: var(--bg-panel);
   border: 1px solid var(--border);
