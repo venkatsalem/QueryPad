@@ -51,8 +51,8 @@ async function connect(id, cfg) {
   if (cfg.type === 'oracle') {
     const db = require('oracledb');
     db.outFormat = db.OUT_FORMAT_OBJECT;
-    const conn = await db.getConnection({ user: cfg.username, password: cfg.password, connectString: oraConnStr(cfg) });
-    active.set(id, { type: 'oracle', conn });
+    const pool = await db.createPool({ user: cfg.username, password: cfg.password, connectString: oraConnStr(cfg), poolMin: 1, poolMax: 5, poolIncrement: 1 });
+    active.set(id, { type: 'oracle', conn: pool });
 
   } else if (cfg.type === 'postgres') {
     const { Pool } = require('pg');
@@ -76,7 +76,7 @@ async function disconnect(id) {
   const entry = active.get(id);
   if (!entry) return;
   try {
-    if (entry.type === 'oracle') await entry.conn.close();
+    if (entry.type === 'oracle') await entry.conn.close(0);
     else await entry.conn.end();
   } catch (_) {}
   active.delete(id);
@@ -93,22 +93,27 @@ async function execute(id, sql) {
 
   if (entry.type === 'oracle') {
     const db = require('oracledb');
-    const r = await entry.conn.execute(stmt, [], {
-      outFormat: db.OUT_FORMAT_OBJECT,
-      fetchArraySize: 2000,
-    });
-    const elapsed = Date.now() - t0;
-    if (r.rows !== undefined) {
-      const columns = r.metaData.map(m => m.name);
-      return {
-        type: 'select',
-        columns,
-        rows: r.rows.map(row => columns.map(c => formatValue(row[c]))),
-        rowCount: r.rows.length,
-        elapsed,
-      };
+    const conn = await entry.conn.getConnection();
+    try {
+      const r = await conn.execute(stmt, [], {
+        outFormat: db.OUT_FORMAT_OBJECT,
+        fetchArraySize: 2000,
+      });
+      const elapsed = Date.now() - t0;
+      if (r.rows !== undefined) {
+        const columns = r.metaData.map(m => m.name);
+        return {
+          type: 'select',
+          columns,
+          rows: r.rows.map(row => columns.map(c => formatValue(row[c]))),
+          rowCount: r.rows.length,
+          elapsed,
+        };
+      }
+      return { type: 'dml', rowsAffected: r.rowsAffected, elapsed };
+    } finally {
+      await conn.close();
     }
-    return { type: 'dml', rowsAffected: r.rowsAffected, elapsed };
 
   } else if (entry.type === 'postgres') {
     const r = await entry.conn.query(stmt);
@@ -156,11 +161,16 @@ async function getSchema(id) {
   if (entry.type === 'oracle') {
     const db = require('oracledb');
     const opt = { outFormat: db.OUT_FORMAT_OBJECT };
-    const t = await entry.conn.execute('SELECT table_name FROM user_tables ORDER BY table_name', [], opt);
-    const c = await entry.conn.execute(
-      'SELECT table_name, column_name FROM user_tab_columns ORDER BY table_name, column_id', [], opt);
-    tables = t.rows.map(r => r.TABLE_NAME);
-    for (const r of c.rows) (columns[r.TABLE_NAME] ||= []).push(r.COLUMN_NAME);
+    const conn = await entry.conn.getConnection();
+    try {
+      const t = await conn.execute('SELECT table_name FROM user_tables ORDER BY table_name', [], opt);
+      const c = await conn.execute(
+        'SELECT table_name, column_name FROM user_tab_columns ORDER BY table_name, column_id', [], opt);
+      tables = t.rows.map(r => r.TABLE_NAME);
+      for (const r of c.rows) (columns[r.TABLE_NAME] ||= []).push(r.COLUMN_NAME);
+    } finally {
+      await conn.close();
+    }
 
   } else if (entry.type === 'postgres') {
     const t = await entry.conn.query(

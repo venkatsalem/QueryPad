@@ -775,10 +775,10 @@ function generateInsertSQL(table, columns, rows) {
 
 function generateUpdateSQL(table, keyCol, columns, rows) {
   const keyIdx = columns.indexOf(keyCol);
+  const setCols = columns.filter((_, i) => i !== keyIdx);
   return rows.map(row => {
-    const sets = columns
-      .filter((_, i) => i !== keyIdx)
-      .map((c, i) => `${quoteId(c)} = ${sqlVal(row[i < keyIdx ? i : i + 1])}`)
+    const sets = setCols
+      .map(c => `${quoteId(c)} = ${sqlVal(row[columns.indexOf(c)])}`)
       .join(', ');
     const where = `${quoteId(keyCol)} = ${sqlVal(row[keyIdx])}`;
     return `UPDATE ${table} SET ${sets} WHERE ${where};`;
@@ -1166,7 +1166,10 @@ function closeDropdowns() {
 }
 
 function setStatus(msg) {
-  if (msg) document.getElementById('results-info').textContent = msg;
+  if (msg) {
+    document.getElementById('results-info').textContent = msg;
+    document.getElementById('st-rows').textContent = msg;
+  }
 }
 
 // Redact credential patterns like "user:password@host" that DB drivers

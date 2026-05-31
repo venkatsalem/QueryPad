@@ -1,12 +1,35 @@
-const { app } = require('electron');
+const { app, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+
+function encryptPassword(plain) {
+  if (!plain) return plain;
+  if (!safeStorage.isEncryptionAvailable()) return plain;
+  return safeStorage.encryptString(plain).toString('base64');
+}
+
+function decryptPassword(stored) {
+  if (!stored) return stored;
+  if (!safeStorage.isEncryptionAvailable()) return stored;
+  try {
+    const buf = Buffer.from(stored, 'base64');
+    return safeStorage.decryptString(buf);
+  } catch (_) {
+    return stored;
+  }
+}
 
 function dataDir() {
   const d = path.join(app.getPath('userData'), 'QueryPad');
   fs.mkdirSync(d, { recursive: true });
   return d;
+}
+
+function safeWrite(filePath, data) {
+  const tmp = filePath + '.tmp';
+  fs.writeFileSync(tmp, data, 'utf8');
+  fs.renameSync(tmp, filePath);
 }
 
 function connectionsFile() { return path.join(dataDir(), 'connections.json'); }
@@ -18,20 +41,23 @@ function read(file) {
 
 // ── connections ───────────────────────────────────────────────────────────────
 
-function loadConnections() { return read(connectionsFile()); }
+function loadConnections() {
+  return read(connectionsFile()).map(c => ({ ...c, password: decryptPassword(c.password) }));
+}
 
 function saveConnection(cfg) {
-  const list = loadConnections();
+  const raw = read(connectionsFile());
   if (!cfg.id) cfg.id = uuidv4();
-  const idx = list.findIndex(c => c.id === cfg.id);
-  if (idx >= 0) list[idx] = cfg; else list.push(cfg);
-  fs.writeFileSync(connectionsFile(), JSON.stringify(list, null, 2));
+  const toStore = { ...cfg, password: encryptPassword(cfg.password) };
+  const idx = raw.findIndex(c => c.id === cfg.id);
+  if (idx >= 0) raw[idx] = toStore; else raw.push(toStore);
+  safeWrite(connectionsFile(), JSON.stringify(raw, null, 2));
   return cfg;
 }
 
 function deleteConnection(id) {
-  const list = loadConnections().filter(c => c.id !== id);
-  fs.writeFileSync(connectionsFile(), JSON.stringify(list, null, 2));
+  const raw = read(connectionsFile()).filter(c => c.id !== id);
+  safeWrite(connectionsFile(), JSON.stringify(raw, null, 2));
   return true;
 }
 
@@ -44,7 +70,7 @@ function queriesDir(connectionId) {
 }
 
 function saveQuery(name, connectionId, content) {
-  fs.writeFileSync(path.join(queriesDir(connectionId), `${name}.sql`), content, 'utf8');
+  safeWrite(path.join(queriesDir(connectionId), `${name}.sql`), content);
   return true;
 }
 
@@ -73,7 +99,7 @@ function deleteQuery(name, connectionId) {
 function sessionFile() { return path.join(dataDir(), 'session.json'); }
 
 function saveSession(session) {
-  fs.writeFileSync(sessionFile(), JSON.stringify(session, null, 2), 'utf8');
+  safeWrite(sessionFile(), JSON.stringify(session, null, 2));
   return true;
 }
 
@@ -114,17 +140,15 @@ function loadHistory(connId) {
 
 function appendHistory(connId, sql) {
   const list = loadHistory(connId);
-  // Remove any existing entry with the same SQL so it floats back to the top
-  // (shell-history style: 50 unique statements, most-recently-used first).
   const existing = list.findIndex(e => e.sql === sql);
   if (existing >= 0) list.splice(existing, 1);
   list.unshift({ sql, ts: Date.now() });
   if (list.length > HISTORY_MAX) list.length = HISTORY_MAX;
-  fs.writeFileSync(historyFile(connId), JSON.stringify(list, null, 2));
+  safeWrite(historyFile(connId), JSON.stringify(list, null, 2));
 }
 
 function clearHistory(connId) {
-  fs.writeFileSync(historyFile(connId), '[]');
+  safeWrite(historyFile(connId), '[]');
 }
 
 module.exports = {
