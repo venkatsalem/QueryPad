@@ -831,6 +831,7 @@ function openNewConnModal() {
     if (el) el.value = '';
   });
   document.getElementById('f-type').value = 'oracle';
+  document.getElementById('f-ssl').checked = false;
   document.getElementById('test-result').textContent = '';
   document.getElementById('test-result').className = 'dim';
   updateConnModalFields();
@@ -850,6 +851,7 @@ function openEditConnModal(conn) {
   document.getElementById('f-db').value      = conn.database || '';
   document.getElementById('f-user').value    = conn.username || '';
   document.getElementById('f-pass').value    = conn.password || '';
+  document.getElementById('f-ssl').checked   = !!conn.ssl;
   document.getElementById('test-result').textContent = '';
   document.getElementById('test-result').className = 'dim';
   updateConnModalFields();
@@ -875,6 +877,7 @@ function updateConnModalFields() {
   const isOracle = type === 'oracle';
   document.getElementById('row-service').classList.toggle('hidden', !isOracle);
   document.getElementById('row-db').classList.toggle('hidden',  isOracle);
+  document.getElementById('row-ssl').classList.toggle('hidden', isOracle);
 }
 
 async function testConnection() {
@@ -928,6 +931,7 @@ function readConnForm() {
     database: document.getElementById('f-db').value.trim() || undefined,
     username: document.getElementById('f-user').value.trim(),
     password: document.getElementById('f-pass').value,
+    ssl:      document.getElementById('f-ssl').checked,
   };
 }
 

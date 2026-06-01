@@ -25,13 +25,17 @@ async function testConnection(cfg) {
 
     } else if (cfg.type === 'postgres') {
       const { Client } = require('pg');
-      const c = new Client({ host: cfg.host, port: cfg.port || 5432, database: cfg.database, user: cfg.username, password: cfg.password, connectionTimeoutMillis: 8000 });
+      const opts = { host: cfg.host, port: cfg.port || 5432, database: cfg.database, user: cfg.username, password: cfg.password, connectionTimeoutMillis: 8000 };
+      if (cfg.ssl) opts.ssl = { rejectUnauthorized: false };
+      const c = new Client(opts);
       await c.connect();
       await c.end();
 
     } else if (cfg.type === 'mysql') {
       const m = require('mysql2/promise');
-      const c = await m.createConnection({ host: cfg.host, port: cfg.port || 3306, database: cfg.database, user: cfg.username, password: cfg.password, connectTimeout: 8000 });
+      const opts = { host: cfg.host, port: cfg.port || 3306, database: cfg.database, user: cfg.username, password: cfg.password, connectTimeout: 8000 };
+      if (cfg.ssl) opts.ssl = { rejectUnauthorized: false };
+      const c = await m.createConnection(opts);
       await c.end();
 
     } else {
@@ -56,12 +60,16 @@ async function connect(id, cfg) {
 
   } else if (cfg.type === 'postgres') {
     const { Pool } = require('pg');
-    const pool = new Pool({ host: cfg.host, port: cfg.port || 5432, database: cfg.database, user: cfg.username, password: cfg.password, max: 5, idleTimeoutMillis: 30000 });
+    const opts = { host: cfg.host, port: cfg.port || 5432, database: cfg.database, user: cfg.username, password: cfg.password, max: 5, idleTimeoutMillis: 30000 };
+    if (cfg.ssl) opts.ssl = { rejectUnauthorized: false };
+    const pool = new Pool(opts);
     active.set(id, { type: 'postgres', conn: pool });
 
   } else if (cfg.type === 'mysql') {
     const m = require('mysql2/promise');
-    const pool = m.createPool({ host: cfg.host, port: cfg.port || 3306, database: cfg.database, user: cfg.username, password: cfg.password, waitForConnections: true, connectionLimit: 5 });
+    const opts = { host: cfg.host, port: cfg.port || 3306, database: cfg.database, user: cfg.username, password: cfg.password, waitForConnections: true, connectionLimit: 5 };
+    if (cfg.ssl) opts.ssl = { rejectUnauthorized: false };
+    const pool = m.createPool(opts);
     active.set(id, { type: 'mysql', conn: pool });
 
   } else {

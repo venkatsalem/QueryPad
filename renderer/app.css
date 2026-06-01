@@ -596,6 +596,23 @@ body {
 .field-row select:focus { border-color: var(--accent); }
 .field-row select option { background: var(--bg-panel); }
 
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.toggle input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.toggle-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
 .modal-ft {
   display: flex;
   align-items: center;
